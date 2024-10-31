@@ -1,7 +1,7 @@
 import Lake
 open Lake DSL
 
-package "remco-mul-div" where
+package "remco-mul" where
   version := v!"0.1.0"
   keywords := #["math"]
   leanOptions := #[
@@ -9,8 +9,7 @@ package "remco-mul-div" where
   ]
 
 require "leanprover-community" / "mathlib"
-require "leanprover-community" / "aesop"
 
 @[default_target]
-lean_lib «RemcoMulDiv» where
+lean_lib «RemcoMul» where
   -- add any library configuration options here

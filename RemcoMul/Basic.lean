@@ -1,6 +1,5 @@
 import Mathlib.Data.Nat.ModEq
 import Mathlib.Tactic.Linarith
-import Aesop
 
 @[simp]
 abbrev UInt256.width := 256
