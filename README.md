@@ -7,5 +7,4 @@ via `sub(sub(x1, x0), lt(x1, x0))` is verified.
 
 Furthermore it verifies a specialization of `fullMulDiv` where the denominator is fixed to `2^128`.
 
-
-Credit to Remco Bloemen under MIT license: 2π.com/17/chinese-remainder-theorem/
+Credit to Remco Bloemen under MIT license: [2π.com/17/chinese-remainder-theorem/](https://xn--2-umb.com/17/chinese-remainder-theorem/)
