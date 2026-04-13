@@ -37,7 +37,7 @@ private theorem bool_to_uint_toNat_eq (mm lower : UInt256) :
 
 theorem remco_equiv_naive (x y : UInt256) : remco_upper256 x y = true_upper256 x y := by
   let L := x.toNat * y.toNat % 2^256
-  have : L < 2^256 := Nat.mod_lt _ (by omega)
+  have L_lt : L < 2^256 := Nat.mod_lt _ (by omega)
   have lower_nat : (x * y).toNat = L := BitVec.toNat_mul x y
   have p_decomp : x.toNat * y.toNat = x.toNat * y.toNat / 2^256 * 2^256 + L := by
     grind [Nat.mod_add_div]
@@ -52,23 +52,21 @@ theorem remco_equiv_naive (x y : UInt256) : remco_upper256 x y = true_upper256 x
     _ = (x.toNat * y.toNat / 2^256 + L) % (2^256 - 1) := mul_add_mod_pred _ _
   have remco_decomp : L + (remco_upper256 x y).toNat * 2^256 = x.toNat * y.toNat := by
     unfold remco_upper256
-    rw [BitVec.toNat_sub, BitVec.toNat_sub, lower_nat, bool_to_uint_toNat_eq,
-        mm_mod, Nat.add_mod_mod]
-    by_cases h : (evm_mulmod x y (~~~0)).toNat < L
-    · -- carry = 1: mm.toNat < L so mm < lower, and Q+L ≥ 2^256-1
-      have mm_lt : evm_mulmod x y (~~~0) < x * y :=
-        BitVec.lt_def.mpr (by simpa [lower_nat] using h)
-      simp only [if_pos mm_lt]
+    simp only [BitVec.toNat_sub, lower_nat, bool_to_uint_toNat_eq]
+    by_cases mm_lt : (evm_mulmod x y (~~~0)) < x * y
+    · -- carry = 1: mm < lower, so Q+L ≥ 2^256-1 and mm.toNat = Q+L-(2^256-1)
       have hQ : x.toNat * y.toNat / 2^256 + L ≥ 2^256 - 1 := by
-        by_contra hq; push Not at hq; rw [mm_mod, Nat.mod_eq_of_lt hq] at h; omega
+        have : (evm_mulmod x y (~~~0)).toNat < L :=
+          lower_nat ▸ BitVec.lt_def.mp mm_lt
+        omega
       have : (evm_mulmod x y (~~~0)).toNat = x.toNat * y.toNat / 2^256 + L - (2^256 - 1) := by omega
-      grind [Nat.mod_eq_of_lt, Nat.add_mod]
-    · -- carry = 0: mm.toNat ≥ L so mm ≮ lower, and Q+L < 2^256-1
-      have mm_nlt : ¬(evm_mulmod x y (~~~0) < x * y) := by
-        intro hlt; have := BitVec.lt_def.mp hlt; rw [lower_nat] at this; exact h this
-      simp only [if_neg mm_nlt]
-      have : (evm_mulmod x y (~~~0)).toNat = x.toNat * y.toNat / 2^256 + L := by omega
-      grind [Nat.mod_eq_of_lt, Nat.add_mod]
+      grind
+    · -- carry = 0: mm ≮ lower, so Q+L < 2^256-1 and mm.toNat = Q+L
+      have hQ : x.toNat * y.toNat / 2^256 + L < 2^256 - 1 := by
+        have : ¬(evm_mulmod x y (~~~0)).toNat < L :=
+          lower_nat ▸ fun h => mm_lt (BitVec.lt_def.mpr h)
+        omega
+      grind
   have : L + (true_upper256 x y).toNat * 2^256 = x.toNat * y.toNat := by
     unfold true_upper256; simp [Nat.shiftRight_eq_div_pow]; grind [Nat.mod_add_div]
   exact BitVec.eq_of_toNat_eq (by omega)
