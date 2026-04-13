@@ -1,15 +1,13 @@
 import Mathlib.Data.Nat.ModEq
 import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.Ring
+
+set_option exponentiation.threshold 1024
 
 @[simp]
 abbrev UInt256.width := 256
 @[simp]
 abbrev UInt256.size := 2^UInt256.width
-
-abbrev m0 := UInt256.size
-abbrev m1 := m0 - 1
-
-lemma m0_gt_zero : 0 < m0 := by decide
 
 abbrev UInt256 := BitVec UInt256.width
 
@@ -45,337 +43,112 @@ def true_upper256 (x y : UInt256): UInt256 :=
       exact Nat.div_lt_of_lt_mul (Nat.mul_lt_mul'' x.isLt y.isLt)
   ⟩
 
-lemma succ_coprime (n : ℕ): Nat.Coprime (n + 1) n := by simp
-
-theorem Nat.chineseRemainder_add_three_add_two_unique (n : ℕ) {a b z : ℕ }
-  (hzan : z ≡ a [MOD (n + 3)]) (hzbm : z ≡ b [MOD (n + 2)]) : z ≡ Int.toNat (((n + 3) * b - (n + 2) * a) % ((n + 3) * (n + 2))) [MOD (n + 3) * (n + 2)] := by
-  let m0 := n + 3
-  let m1 := n + 2
-  have chin_rem_unique := Nat.chineseRemainder_modEq_unique (succ_coprime m1) hzan hzbm
-  simp [chineseRemainder, chineseRemainder', Nat.xgcd, Nat.xgcdAux, Nat.lcm] at chin_rem_unique
-  rewrite [
-    (by simp : n + 3 = m0),
-    (by simp : n + 2 = m1),
-    (by omega : (n : ℤ) + 3 = ↑m0),
-    (by omega : (n : ℤ) + 2 = ↑m1),
-  ]
-  rewrite [(by simp : n + 3 = m0)] at hzan
-  rewrite [(by simp : n + 2 = m1)] at hzbm
-  simp [Nat.mod_one] at chin_rem_unique
-  simp [(Int.ediv_eq_zero_of_lt (by decide) (by omega) : 1 / (m1 : ℤ) = 0)] at chin_rem_unique
-  simp [(Int.ediv_eq_zero_of_lt (by omega) (by omega) : (m1 : ℤ) / ((m1 : ℤ) + 1) = 0)] at chin_rem_unique
-  simp [(by omega : (m1 : ℤ) + 1 = (m0 : ℤ))] at chin_rem_unique
-  simp [ModEq] at *
-  rw [(by simp : m1 + 1 = m0)] at chin_rem_unique
-  exact chin_rem_unique
-
-def bool_to_nat: Bool → ℕ
-  | true => 1
-  | false => 0
-
-/-- WOw docs?-/
-lemma Int.sub_mod_eq_no_mod_lt {x y m : ℕ}:
-  x < m → y < m →
-  ((x : ℤ) - (y : ℤ)) % ↑m = ↑(m * bool_to_nat (x < y) + x - y)
-  := by
-  intro x_lt y_lt
-  if y_gt_x: x < y
-  then
-    simp [bool_to_nat, y_gt_x]
-    rw [← Int.add_mul_emod_self (b := 1), Int.one_mul, Int.add_comm, ← Int.add_sub_assoc]
-    rw [(by omega : ((m : ℤ) + ↑x - ↑y) = ↑(m + x - y)), ← Int.natCast_mod]
-    have lt_m : (m + x - y) < m := by omega
-    rw [Nat.mod_eq_of_lt lt_m]
-  else
-    simp [bool_to_nat, y_gt_x]
-    rw [(by omega : ((x : ℤ) - ↑y) = ↑(x - y)), ← Int.natCast_mod]
-    have lt_m : (x - y) < m := by omega
-    rw [Nat.mod_eq_of_lt lt_m]
-
-
-@[simp]
-def remco_full_mul (x y : UInt256): ℕ :=
-  let hidden_full := x.toNat * y.toNat
-  let x0 := hidden_full % m0
-  let x1 := hidden_full % m1
-  bool_to_nat (x0 > x1) * m0 * m1 + x0 + x1 * m0 - x0 * m0
-
-
-lemma Nat.add_sub_eq_sub_sub { a b c : ℕ }:  b < c → a + b - c = a - (c - b) := by omega
-
-lemma Nat.div_both_eq (c : ℕ) { a b : ℕ }: a = b → a / c = b / c := by
-  intro h
-  rw [h]
-
-theorem Nat.add_self_sub_mod { a b m : ℕ } : b ≤ a → (m + a - b) % m = (a - b) % m := by
-  intro b_le_a
-  rw [Nat.add_sub_assoc b_le_a m]
-  rw [Nat.add_mod]
-  simp
-
-lemma Nat.lt_mul_sub_one_iff_lt (a b m : ℕ) : b < m → ((m * a < (m - 1) * b) ↔ (a < b)) := by
-  intro m_gt_b
-  constructor
-  {
-    intro top_cmp
-    rw [Nat.sub_mul, one_mul] at top_cmp
-    have weird_sub_lt_no_sub : m * b - b ≤ m * b := by omega
-    have ma_lt_mb : m * a < m * b := by omega
-    exact Nat.lt_of_mul_lt_mul_left ma_lt_mb
-  }
-  {
-    intro top_cmp
-    rw [Nat.sub_mul, one_mul]
-    have ma_lt_mb : m * a < m * b := (Nat.mul_lt_mul_left (by omega)).mpr top_cmp
-
-    apply Nat.sub_lt_sub_right (c := m * a) (by omega) at ma_lt_mb
-    rw [Nat.sub_self, ← Nat.mul_sub] at ma_lt_mb
-    have b_minus_a_ne_zero : 0 <  (b - a) := by omega
-    have b_minus_a_le_one : 1 ≤ (b - a) := by omega
-    have prod_sub_b_ne_zero : m * (b - a) - b ≠ 0 := Nat.sub_ne_zero_of_lt (by {
-      have b_lt_m_mul_one : m * 1 ≤ m * (b - a) := Nat.mul_le_mul_left m b_minus_a_le_one
-      omega
-    })
-    apply Nat.ne_zero_iff_zero_lt.mp at prod_sub_b_ne_zero
-    rw [Nat.mul_sub] at prod_sub_b_ne_zero
+-- Helper matching the exact form produced by BitVec.toNat_sub after decomposition
+private theorem remco_arith_helper (Q L M c p : Nat)
+    (hp : p = Q * 2^256 + L)
+    (hM : M = p % (2^256 - 1))
+    (hc : c = if M < L then 1 else 0)
+    (hQ : Q ≤ 2^256 - 2)
+    (hL : L < 2^256) :
+    L + (2^256 - c + (2^256 - L + M) % 2^256) % 2^256 * 2^256 = p := by
+  have M_eq : M = (Q + L) % (2^256 - 1) := by
+    rw [hM, hp]
+    have h1 : 2^256 % (2^256 - 1) = 1 := by omega
+    have h2 : Q * 2^256 % (2^256 - 1) = Q % (2^256 - 1) := by
+      rw [Nat.mul_mod, h1, Nat.mul_one, Nat.mod_mod]
+    rw [Nat.add_mod _ _ (2^256 - 1), h2, Nat.add_mod_mod, Nat.mod_add_mod]
+  by_cases h : Q + L < 2^256 - 1
+  · -- M = Q + L, c = 0
+    have M_val : M = Q + L := by rw [M_eq, Nat.mod_eq_of_lt h]
+    have c_val : c = 0 := by rw [hc, M_val]; exact if_neg (by omega)
+    rw [M_val, c_val, hp]
+    -- L + (2^256 + (2^256 - L + Q + L) % 2^256) % 2^256 * 2^256 = Q*2^256 + L
+    -- (2^256 - L + Q + L) = (2^256 + Q)
+    -- Since Q < 2^256: (2^256 + Q) % 2^256 = Q
+    -- So: L + (2^256 + Q) % 2^256 * 2^256 = Q*2^256 + L
+    have h_q : Q < 2^256 := by omega
+    have h_inner : (2^256 + Q) % 2^256 = Q := by omega
+    rw [show (2^256 - L + (Q + L)) = 2^256 + Q by omega, h_inner]
     omega
-  }
-
-theorem remco_equiv_naive(x y : UInt256) : (remco_upper256 x y).toNat = (x.toNat * y.toNat) >>> 256 := by
-  let z := x.toNat * y.toNat
-  let upper := z >>> UInt256.width
-  let x0 := z % m0
-  let x1 := z % m1
-
-  have x0_lt_m0 : x0 < m0 := by
-    simp [x0]
-    exact Nat.mod_lt z (by decide)
-  have x1_lt_m1 : x1 < m1 := by
-    simp [x1]
-    exact Nat.mod_lt z (by decide)
-
-  have z_le : z ≤ (m1 * m1) := Nat.mul_le_mul (Nat.le_of_lt_succ x.isLt) (Nat.le_of_lt_succ y.isLt)
-  have z_lt : z < (m0 * m1) := Nat.lt_of_le_of_lt z_le (by decide)
-  have z_eq_no_mod : z = z % (m0 * m1) := Eq.symm <| Nat.mod_eq_of_lt z_lt
-  simp [m0, m1] at z_eq_no_mod
-
-  have comp_z_chinese :=
-    Nat.chineseRemainder_add_three_add_two_unique (m0 - 3) (a := x0) (b := x1) (z := z)
-    ( by simp [Nat.ModEq, x0, m0])
-    ( by simp [Nat.ModEq, x1, m0, m1])
-
-
-  simp only [Nat.ModEq] at comp_z_chinese
-  rw [
-    (by simp [m0] : m0 - 3 + 3 = m0),
-    (by simp [m0, m1] : m0 - 3 + 2 = m1),
-    (by simp [m0] : (↑(m0 - 3) : ℤ) + 3 = m0),
-    (by simp [m0] : (↑(m0 - 3) : ℤ) + 2 = m1)
-  ] at comp_z_chinese
-
-  apply Eq.trans z_eq_no_mod at comp_z_chinese
-
-  have left_lt_m01 : m0 * x1 < m0 * m1 := (Nat.mul_lt_mul_left (by decide)).mpr x1_lt_m1
-  have right_lt_m01 : m1 * x0 < m0 * m1 := (Nat.mul_lt_mul_left (by decide)).mpr x0_lt_m0
-
-  repeat rw [
-    (by omega : ∀ (a b : ℕ), ((↑a * ↑b) : ℤ) = ↑(a * b))
-  ] at comp_z_chinese
-
-  rw [
-    Int.sub_mod_eq_no_mod_lt
-      left_lt_m01
-      right_lt_m01
-  ] at comp_z_chinese
-
-  rw [(by omega : ∀ x: ℕ, (x : ℤ).toNat = x)] at comp_z_chinese
-
-  have z_comp_lt_m01 : m0 * m1 * bool_to_nat ((m1 * x0 > m0 * x1)) + m0 * x1 - m1 * x0 < m0 * m1 := by
-    if sides_lt:  m0 * x1 < m1 * x0
-    then
-      simp [sides_lt, bool_to_nat]
-      rw [Nat.add_sub_eq_sub_sub sides_lt]
-      have d_gt_zero : m1 * x0 - m0 * x1 > 0 := by omega
-      have d_le_m01 : m1 * x0 - m0 * x1 ≤  m0 * m1 := by omega
-      apply Nat.sub_lt_self d_gt_zero d_le_m01
-    else
-      simp [sides_lt, bool_to_nat]
-      omega
-
-  apply Nat.div_both_eq m0 at comp_z_chinese
-  rw [(by decide : m0 = 2^UInt256.width)] at comp_z_chinese
-  rw [← Nat.shiftRight_eq_div_pow] at comp_z_chinese
-  rw [← (by decide : m0 = 2^UInt256.width)] at comp_z_chinese
-  simp only [UInt256.width] at comp_z_chinese
-
-  rw [Nat.mod_eq_of_lt z_comp_lt_m01, (by simp : m1 = m0 - 1)] at comp_z_chinese
-  simp_rw [
-    eq_iff_iff.mpr gt_iff_lt,
-    eq_iff_iff.mpr (Nat.lt_mul_sub_one_iff_lt x1 x0 m0 x0_lt_m0)
-  ] at comp_z_chinese
-
-  simp [upper]
-  rw [comp_z_chinese]
-  simp [remco_upper256]
-  simp [Fin.sub_def, Fin.mul_def]
-
-  simp_rw [
-    (by decide : 115792089237316195423570985008687907853269984665640564039457584007913129639936 = m0),
-    (by decide : 115792089237316195423570985008687907853269984665640564039457584007913129639935 = m1),
-  ]
-  rw [
-    ← (by simp [z] : z = x.toNat * y.toNat ),
-    ← (by simp [x0, z] : x0 = z % m0 ),
-    ← (by simp [x1, z] : x1 = z % m1 )
-  ]
-
-  if x1_lt_x0 : x1 < x0
-  then
-    simp [x1_lt_x0, bool_to_nat]
-    simp only [Nat.mul_sub, Nat.mul_sub_div]
-    rw [← Nat.mul_sub, ← Nat.mul_add]
-
-    have x0_ne_zero : x0 ≠ 0 := by omega
-    have m1_mul_x0_ne_zero : (m0 - 1) * x0 ≠ 0 := Nat.mul_ne_zero (by decide) x0_ne_zero
-    let m1_mul_x0_sub_one := (m0 - 1) * x0 - 1
-    have m1_mul_x0_is_succ : (m0 - 1) * x0 = m1_mul_x0_sub_one + 1 := by omega
-    rw [m1_mul_x0_is_succ]
-    rw [Nat.mul_sub_div m1_mul_x0_sub_one m0 (m0 - 1 + x1) (by {
-      simp only [m1_mul_x0_sub_one]
-      have add_lt_add_one (a b : ℕ) : a < b ↔ a + 1 < b + 1 := by omega
-      rw [eq_iff_iff.mpr <| add_lt_add_one ((m0 - 1) * x0 - 1) (m0 * (m0 - 1 + x1))]
-      rw [Nat.sub_one_add_one m1_mul_x0_ne_zero]
-      have m1x0_lt_max_prod : (m0 - 1) * x0 < (m0 - 1) * m0 := by
-        apply (Nat.mul_lt_mul_left (a := (m0 - 1)) (by decide)).mpr
-        exact x0_lt_m0
-      have m1m0_lt_more : m0 * (m0 - 1) < m0 * ((m0 - 1) + x1) + 1 := by
-        rw [Nat.mul_add, Nat.add_assoc, Nat.add_comm (m0 * x1) 1, ← Nat.add_assoc]
-        exact Nat.lt_add_right (m0 * x1) (Nat.lt_add_one <| m0 * (m0 - 1))
-      exact Nat.lt_trans m1x0_lt_max_prod m1m0_lt_more
-    })]
-    simp only [m1_mul_x0_sub_one]
-    rw [Nat.sub_mul, Nat.one_mul]
-    rw [Nat.sub_sub]
-    rw [Nat.mul_sub_div x0 m0 x0 (by {
-      exact (Nat.lt_mul_iff_one_lt_left (a := m0) (b := x0) (by omega)).mpr (by decide)
-    })]
-    have x0_div_m0_eq_zero : x0 / m0 = 0 := (Nat.div_eq_zero_iff m0_gt_zero).mpr x0_lt_m0
-    rw [x0_div_m0_eq_zero]
-    simp only [Nat.zero_add]
-    rw [Nat.sub_one_add_one x0_ne_zero]
-    rw [← Nat.sub_add_comm (by omega : x0 ≤ m0)]
-
-    rw [(by omega : m0 + x1 - x0 = m0 - (x0 - x1) )]
-
-    have d_le_m0 : (x0 - x1) ≤ m0 := by omega
-    rw [← Nat.add_sub_assoc d_le_m0]
-
-    rw [← Nat.sub_add_comm (by decide : 1 ≤ m0)]
-    rw [Nat.sub_sub]
-
-    have one_plus_d_le_m0 : (1 + (x0 - x1)) ≤ m0 := by
-      rw [eq_iff_iff.mpr <| Nat.one_add_le_iff (m := x0 - x1) (n := m0)]
-      have d_le_x0 : x0 - x1 ≤ x0 := by simp
-      exact Nat.lt_of_le_of_lt d_le_x0 x0_lt_m0
-    rw [Nat.add_self_sub_mod one_plus_d_le_m0]
-    rw [( by omega : ∀ (a b c : ℕ), a - (b + c) = a - b - c )]
-    rw [(by omega : (m0 - 1 - (x0 - x1)) =  (m0 - 1 + x1 - x0) )]
-    have brack_lt_m0 : m0 - 1 + x1 - x0 < m0 := by omega
-    exact Nat.mod_eq_of_lt brack_lt_m0
-  else
-    simp [x1_lt_x0, bool_to_nat]
-    simp only [Nat.sub_mul, Nat.one_mul]
-    simp at x1_lt_x0
-    rename x0 ≤ x1 => x0_le_x1
-    have x1_lt_m0 : x1 < m0 := Nat.lt_trans (by omega : x1 < m1) (by simp : m1 < m0)
-    match x0_val: x0 with
-    | 0 => {
-      simp
-
-      exact Nat.mod_eq_of_lt x1_lt_m0
-    }
-    | x0_neg_one+1 => {
-      simp at x0_val
-      rw [← x0_val]
-      rw [← x0_val] at x0_lt_m0
-      rw [← x0_val] at x0_le_x1
-      /- rw [Nat.exists_eq_succ_of_ne_zero] -/
-      have x0_ne_zero : x0 ≠ 0 := by omega
-      let weird_prod_sub_one := m0 * x0 - x0 - 1
-      have weird_prod_eq_succ : m0 * x0 - x0 = weird_prod_sub_one + 1 := by
-        simp [weird_prod_sub_one]
-        have weird_prod_ne_zero : m0 * x0 - x0 ≠ 0 := Nat.ne_zero_iff_zero_lt.mpr (by {
-          rw [← eq_iff_iff.mpr (Nat.add_lt_add_iff_right (k := x0))]
-          simp
-          exact (Nat.lt_mul_iff_one_lt_left (a := m0) (b := x0) (by omega)).mpr (by decide)
-        })
-        rw [Nat.sub_one_add_one weird_prod_ne_zero]
-      rw [weird_prod_eq_succ]
-      rw [Nat.mul_sub_div weird_prod_sub_one m0 x1 (by {
-        simp [weird_prod_sub_one]
-        have m0_mul_x0_le_x1 : m0 * x0 ≤ m0 * x1 := Nat.mul_le_mul (by omega) (x0_le_x1)
-        have d_lt_prod : m0 * x0 - x0 - 1 < m0 * x0 := by {
-          rw [Nat.sub_sub]
-          have m0_mul_x0_ne_zero : 0 < m0 * x0 := Nat.ne_zero_iff_zero_lt.mp <| Nat.mul_ne_zero (by decide) x0_ne_zero
-          exact Nat.sub_lt m0_mul_x0_ne_zero (by simp)
-        }
-        omega
-      })]
-      simp only [weird_prod_sub_one]
-      rw [Nat.sub_sub]
-      rw [Nat.mul_sub_div x0 m0 x0 (by {
-        exact (Nat.lt_mul_iff_one_lt_left (a := m0) (b := x0) (by omega)).mpr (by decide)
-      })]
-      have x0_div_m0_eq_zero : x0 / m0 = 0 := (Nat.div_eq_zero_iff m0_gt_zero).mpr x0_lt_m0
-      rw [x0_div_m0_eq_zero, Nat.zero_add, Nat.sub_one_add_one x0_ne_zero]
-      rw [← Nat.sub_add_comm (Nat.le_of_lt x0_lt_m0)]
-      rw [Nat.add_self_sub_mod (m := m0) x0_le_x1]
-      exact Nat.mod_eq_of_lt <| Nat.lt_trans (by omega : x1 - x0 < x1) (by omega)
-    }
-
-def full_mul_div_x128 (x y : UInt256) : Option UInt256 :=
-  let upper := remco_upper256 x y
-  let lower := x * y
-  if upper < 1 <<< 128
-  then .some ((upper <<< 128) + (lower >>> 128))
-  else .none
-
-def naive_mul_div_x128 (x y : UInt256) : Option UInt256 :=
-  let result := (x.toNat * y.toNat) / (1 <<< 128)
-  if is_lt : result < 2^UInt256.width
-  then .some ⟨result, is_lt⟩
-  else .none
-
-theorem full_mul_div_x128_equiv_naive (x y : UInt256) : full_mul_div_x128 x y = naive_mul_div_x128 x y := by
-  let z := x.toNat * y.toNat
-  simp [full_mul_div_x128, naive_mul_div_x128]
-  simp [BitVec.lt_def, BitVec.add_def]
-  repeat rw [remco_equiv_naive]
-  rw [(by simp : x.toNat * y.toNat = z)]
-  simp only [Nat.shiftRight_eq_div_pow, Nat.shiftLeft_eq]
-  simp_rw [
-    (by decide : 115792089237316195423570985008687907853269984665640564039457584007913129639936 = 2^256),
-    (by decide : 340282366920938463463374607431768211456 = 1 <<< 128)
-  ]
-  simp only [
-    eq_iff_iff.mpr <| Nat.div_lt_iff_lt_mul (x := z) (y := 1 <<< 128) (by simp : 0 < 2^256),
-    eq_iff_iff.mpr <| Nat.div_lt_iff_lt_mul (x := z) (y := 2^256) (by simp : 0 < 1 <<< 128)
-  ]
-  if z_no_overflow : z < 1 <<< (128 + 256)
-  then
-    simp at z_no_overflow
-    simp [z_no_overflow]
-    apply BitVec.eq_of_toNat_eq
-    unfold BitVec.toNat BitVec.toFin
-    simp
-    simp_rw [
-      (by decide : 115792089237316195423570985008687907853269984665640564039457584007913129639936 = 2^256),
-      (by decide : 340282366920938463463374607431768211456 = 1 <<< 128)
-    ] at *
-    simp only [Nat.shiftLeft_eq]
+  · -- M = Q + L - (2^256 - 1), c = 1
+    have h_range : Q + L - (2^256 - 1) < 2^256 - 1 := by omega
+    have M_val : M = Q + L - (2^256 - 1) := by
+      rw [M_eq]
+      have : Q + L = (Q + L - (2^256 - 1)) + (2^256 - 1) := by omega
+      conv_lhs => rw [this, Nat.add_mod_right]
+      exact Nat.mod_eq_of_lt h_range
+    have c_val : c = 1 := by rw [hc, M_val]; exact if_pos (by omega)
+    rw [M_val, c_val, hp]
+    -- L + (2^256 - 1 + (2^256 - L + Q + L - (2^256 - 1)) % 2^256) % 2^256 * 2^256 = Q*2^256 + L
+    -- 2^256 - L + Q + L - (2^256 - 1) = Q + 1
+    -- Since Q+1 < 2^256: (Q+1) % 2^256 = Q+1
+    -- 2^256 - 1 + (Q+1) = 2^256 + Q
+    -- (2^256 + Q) % 2^256 = Q
+    -- So: L + Q * 2^256 = Q*2^256 + L
+    have h_q : Q + 1 < 2^256 := by omega
+    have h_inner : (Q + 1) % 2^256 = Q + 1 := by omega
+    have h_outer : (2^256 + Q) % 2^256 = Q := by omega
+    rw [show (2^256 - L + (Q + L - (2^256 - 1))) = Q + 1 by omega, h_inner,
+        show 2^256 - 1 + (Q + 1) = 2^256 + Q by omega, h_outer]
     omega
-  else
-    simp at z_no_overflow
-    simp [z_no_overflow]
-    apply Nat.le_lt_asymm at z_no_overflow
-    simp [z_no_overflow]
+
+private theorem bool_to_uint_toNat_eq (mm lower : UInt256) :
+    (bool_to_uint (mm < lower)).toNat = if mm < lower then 1 else 0 := by
+  by_cases h : mm < lower
+  · simp only [bool_to_uint, h]; rfl
+  · simp only [bool_to_uint, h]; rfl
+
+private theorem width_eq : (2^UInt256.width : Nat) = 2^256 := rfl
+
+theorem remco_equiv_naive (x y : UInt256) : remco_upper256 x y = true_upper256 x y := by
+  -- Bounds
+  have x_le : x.toNat ≤ 2^256 - 1 := by have := x.isLt; simp [UInt256.width] at *; omega
+  have y_le : y.toNat ≤ 2^256 - 1 := by have := y.isLt; simp [UInt256.width] at *; omega
+  have Q_le : x.toNat * y.toNat / 2^256 ≤ 2^256 - 2 := by
+    have h_le := Nat.mul_le_mul x_le y_le
+    have h_sq : ((2^256 - 1) * (2^256 - 1)) / 2^256 ≤ 2^256 - 2 := by
+      have : (2^256 - 1) * (2^256 - 1) = 2^256 * (2^256 - 2) + 1 := by ring
+      rw [this, Nat.mul_add_div (by omega)]; simp
+    exact Nat.le_trans (Nat.div_le_div_right h_le) h_sq
+  have L_lt : x.toNat * y.toNat % 2^256 < 2^256 := Nat.mod_lt _ (by omega)
+  -- Key BitVec facts
+  have mm_nat : (evm_mulmod x y (~~~0)).toNat = x.toNat * y.toNat % (2^256 - 1) := by simp [evm_mulmod]
+  have lower_nat : (x * y).toNat = x.toNat * y.toNat % 2^256 := BitVec.toNat_mul x y
+  -- true_upper256
+  have true_toNat : (true_upper256 x y).toNat = x.toNat * y.toNat / 2^256 := by
+    unfold true_upper256; simp [Nat.shiftRight_eq_div_pow]
+  have true_decomp :
+      x.toNat * y.toNat % 2^256 + (true_upper256 x y).toNat * 2^256 = x.toNat * y.toNat := by
+    rw [true_toNat]; have := Nat.mod_add_div (x.toNat * y.toNat) (2^256); omega
+  -- remco_upper256 decomposition
+  have remco_decomp :
+      x.toNat * y.toNat % 2^256 + (remco_upper256 x y).toNat * 2^256 = x.toNat * y.toNat := by
+    by_cases M_lt_L : x.toNat * y.toNat % (2^256 - 1) < x.toNat * y.toNat % 2^256
+    · -- Case: M < L (c = 1)
+      have h_lt : (evm_mulmod x y (~~~0)).toNat < (x * y).toNat := by
+        rw [mm_nat, lower_nat]; exact M_lt_L
+      have h_lt' : evm_mulmod x y (~~~0) < x * y := h_lt
+      unfold remco_upper256
+      rw [BitVec.toNat_sub, BitVec.toNat_sub, mm_nat, lower_nat]
+      rw [bool_to_uint_toNat_eq, if_pos h_lt']
+      conv_lhs => rw [width_eq, width_eq, width_eq]
+      apply remco_arith_helper (x.toNat * y.toNat / 2^256)
+        (x.toNat * y.toNat % 2^256) (x.toNat * y.toNat % (2^256 - 1)) 1
+        (x.toNat * y.toNat) (by have := Nat.mod_add_div (x.toNat * y.toNat) (2^256); omega)
+        (by rfl) (by exact (if_pos M_lt_L).symm) Q_le L_lt
+    · -- Case: M ≥ L (c = 0)
+      have h_nlt : ¬(evm_mulmod x y (~~~0)).toNat < (x * y).toNat := by rw [mm_nat, lower_nat]; omega
+      have h_nlt' : ¬evm_mulmod x y (~~~0) < x * y := h_nlt
+      unfold remco_upper256
+      rw [BitVec.toNat_sub, BitVec.toNat_sub, mm_nat, lower_nat]
+      rw [bool_to_uint_toNat_eq, if_neg h_nlt']
+      conv_lhs => rw [width_eq, width_eq, width_eq]
+      apply remco_arith_helper (x.toNat * y.toNat / 2^256)
+        (x.toNat * y.toNat % 2^256) (x.toNat * y.toNat % (2^256 - 1)) 0
+        (x.toNat * y.toNat) (by have := Nat.mod_add_div (x.toNat * y.toNat) (2^256); omega)
+        (by rfl) (by exact (if_neg (by omega)).symm) Q_le L_lt
+  -- Both decompose the same way
+  have toNat_eq : (remco_upper256 x y).toNat = (true_upper256 x y).toNat := by
+    have : (remco_upper256 x y).toNat * 2^256 = (true_upper256 x y).toNat * 2^256 := by omega
+    exact Nat.eq_of_mul_eq_mul_right (by omega) this
+  exact BitVec.eq_of_toNat_eq toNat_eq
