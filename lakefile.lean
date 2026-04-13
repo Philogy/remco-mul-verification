@@ -8,7 +8,7 @@ package "remco-mul" where
     ⟨`pp.unicode.fun, true⟩ -- pretty-prints `fun a ↦ b`
   ]
 
-require "leanprover-community" / "mathlib"
+require "leanprover-community" / "mathlib" @ git "v4.29.0"
 
 @[default_target]
 lean_lib «RemcoMul» where
