@@ -7,7 +7,7 @@ set_option exponentiation.threshold 1024
 @[simp] abbrev UInt256.size := 2^UInt256.width
 abbrev UInt256 := BitVec UInt256.width
 
-@[simp]
+@[grind]
 def evm_mulmod (x y m : UInt256) : UInt256 :=
   if h : m > 0 then
     let a := x.toNat; let b := y.toNat
@@ -25,12 +25,6 @@ def true_upper256 (x y : UInt256) : UInt256 :=
   ⟨(x.toNat * y.toNat) >>> UInt256.width,
     by rw [Nat.shiftRight_eq_div_pow]; exact Nat.div_lt_of_lt_mul (Nat.mul_lt_mul'' x.isLt y.isLt)⟩
 
--- 2^256 ≡ 1 (mod 2^256 - 1)
-private theorem mul_add_mod_pred (Q L : ℕ) :
-    (Q * 2^256 + L) % (2^256 - 1) = (Q + L) % (2^256 - 1) := by
-  have : 2^256 % (2^256 - 1) = 1 := by omega
-  rw [Nat.add_mod, Nat.mul_mod, this, Nat.mul_one, Nat.mod_mod, Nat.add_mod_mod, Nat.mod_add_mod]
-
 private theorem bool_to_uint_toNat_eq (mm lower : UInt256) :
     (bool_to_uint (mm < lower)).toNat = if mm < lower then 1 else 0 := by
   by_cases h : mm < lower <;> simp [bool_to_uint, h]
@@ -46,10 +40,7 @@ theorem remco_equiv_naive (x y : UInt256) : remco_upper256 x y = true_upper256 x
       (show x.toNat ≤ 2^256-1 from by have := x.isLt; simp [UInt256.width] at *; omega)
       (show y.toNat ≤ 2^256-1 from by have := y.isLt; simp [UInt256.width] at *; omega)
     omega
-  have mm_mod : (evm_mulmod x y (~~~0)).toNat = (x.toNat * y.toNat / 2^256 + L) % (2^256 - 1) := calc
-    _ = (x.toNat * y.toNat) % (2^256 - 1) := by simp [evm_mulmod]
-    _ = (x.toNat * y.toNat / 2^256 * 2^256 + L) % (2^256 - 1) := congrArg (· % (2^256 - 1)) p_decomp
-    _ = (x.toNat * y.toNat / 2^256 + L) % (2^256 - 1) := mul_add_mod_pred _ _
+  have mm_mod : (evm_mulmod x y (~~~0)).toNat = (x.toNat * y.toNat / 2^256 + L) % (2^256 - 1) := by grind
   have remco_decomp : L + (remco_upper256 x y).toNat * 2^256 = x.toNat * y.toNat := by
     unfold remco_upper256
     simp only [BitVec.toNat_sub, lower_nat, bool_to_uint_toNat_eq]
