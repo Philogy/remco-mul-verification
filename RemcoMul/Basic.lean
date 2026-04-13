@@ -39,7 +39,9 @@ private theorem remco_arith_helper (Q L M c p : Nat)
     (hc : (if M < L then 1 else 0) = c)
     (hQ : Q ≤ 2^256 - 2) (hL : L < 2^256) :
     L + (2^256 - c + (2^256 - L + M) % 2^256) % 2^256 * 2^256 = p := by
+
   have M_eq : M = (Q + L) % (2^256 - 1) := by rw [hM, hp, mul_add_mod_pred]
+
   rw [Nat.add_mod_mod]
   by_cases h : Q + L < 2^256 - 1
   · grind
@@ -61,36 +63,38 @@ theorem remco_equiv_naive (x y : UInt256) : remco_upper256 x y = true_upper256 x
     have h_le := Nat.mul_le_mul x_le y_le
     omega
   let L := x.toNat * y.toNat % 2^256
-  let M := x.toNat * y.toNat % (2^256 - 1) 
-  have L_lt : L < 2^256 := Nat.mod_lt _ (by omega)
-  have mm_nat : (evm_mulmod x y (~~~0)).toNat = M := by simp [M, evm_mulmod]
   have lower_nat : (x * y).toNat = L := BitVec.toNat_mul x y
   have true_decomp : L + (true_upper256 x y).toNat * 2^256 = x.toNat * y.toNat := by
     unfold true_upper256 
     simp [Nat.shiftRight_eq_div_pow]
     have := Nat.mod_add_div (x.toNat * y.toNat) (2^256)
     omega
-  have remco_decomp :
-      x.toNat * y.toNat % 2^256 + (remco_upper256 x y).toNat * 2^256 = x.toNat * y.toNat := by
-    by_cases M_lt_L : M < L
+  have remco_decomp : x.toNat * y.toNat % 2^256 + (remco_upper256 x y).toNat * 2^256 = x.toNat * y.toNat := by
+    unfold remco_upper256
+    rw [BitVec.toNat_sub, BitVec.toNat_sub, lower_nat, bool_to_uint_toNat_eq, Nat.add_mod_mod]
+    by_cases M_lt_L : evm_mulmod x y (~~~0) < x * y
     · -- M < L: carry = 1
-      have h_lt' : evm_mulmod x y (~~~0) < x * y := M_lt_L
-      unfold remco_upper256
-      rw [BitVec.toNat_sub, BitVec.toNat_sub, mm_nat, lower_nat,
-          bool_to_uint_toNat_eq, if_pos h_lt']
+      rw [if_pos M_lt_L]
       conv_lhs => rw [width_eq, width_eq, width_eq]
-      exact remco_arith_helper _ _ _ 1 _
-        (by have := Nat.mod_add_div (x.toNat * y.toNat) (2^256); omega)
-        (by rfl) (if_pos M_lt_L) Q_le L_lt
+
+
+      /-
+
+⊢ BitVec.toNat x * BitVec.toNat y % 2 ^ 256 +
+    (2 ^ 256 - 1 + (2 ^ 256 - L + BitVec.toNat (evm_mulmod x y (~~~0)))) % 2 ^ 256 * 2 ^ 256 =
+  BitVec.toNat x * BitVec.toNat y
+      -/
+
+      sorry
+
+
+
     · -- M ≥ L: carry = 0
-      have h_nlt : ¬M < (x * y).toNat := by omega
-      have h_nlt' : ¬evm_mulmod x y (~~~0) < x * y := h_nlt
-      unfold remco_upper256
-      rw [BitVec.toNat_sub, BitVec.toNat_sub, mm_nat, lower_nat,
-          bool_to_uint_toNat_eq, if_neg h_nlt']
-      conv_lhs => rw [width_eq, width_eq, width_eq]
-      exact remco_arith_helper _ _ _ 0 _
-        (by have := Nat.mod_add_div (x.toNat * y.toNat) (2^256); omega)
-        (by rfl) (if_neg M_lt_L) Q_le L_lt
+      sorry
+      /- rw [if_neg M_lt_L] -/
+      /- conv_lhs => rw [width_eq, width_eq, width_eq] -/
+      /- exact remco_arith_helper _ _ _ 0 _ -/
+      /-   (by have := Nat.mod_add_div (x.toNat * y.toNat) (2^256); omega) -/
+      /-   (by rfl) (if_neg M_lt_L) Q_le L_lt -/
   have key : (remco_upper256 x y).toNat * 2^256 = (true_upper256 x y).toNat * 2^256 := by omega
   exact BitVec.eq_of_toNat_eq (Nat.eq_of_mul_eq_mul_right (by omega) key)
